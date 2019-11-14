@@ -67,10 +67,24 @@ class Query
         $date_filter = $matches[0];
 
         $filters = [];
-        foreach ($dates as $date) {
-            $filters[] = $date." BETWEEN '|period_start|' AND '|period_end|'";
+        if ($dates[0] != 'custom') {
+            foreach ($dates as $date) {
+                $filters[] = $date." BETWEEN '|period_start|' AND '|period_end|'";
+            }
+        } else {
+            foreach ($dates as $k => $v) {
+                if ($k < 1) {
+                    continue;
+                }
+                $filters[] = $v;
+            }
         }
         $date_query = !empty($filters) && !empty(self::$segments) ? ' AND ('.implode(' OR ', $filters).')' : '';
+
+        // Sostituzione periodi temporali
+        preg_match('|segment\((.+?)\)|', $query, $matches);
+        $segment_name = !empty($matches[1]) ? $matches[1] : 'id_segment';
+        $segment_filter = !empty($matches[0]) ? $matches[0] : 'segment';
 
         // Elenco delle sostituzioni
         $replace = [
@@ -87,7 +101,7 @@ class Query
             '|period_end|' => $_SESSION['period_end'],
 
             // Segmenti
-            '|segment|' => !empty($segment) ? ' AND id_segment = '.prepare($segment) : '',
+            '|'.$segment_filter.'|' => !empty($segment) ? ' AND '.$segment_name.' = '.prepare($segment) : '',
         ];
 
         // Sostituzione dei formati
@@ -190,7 +204,7 @@ class Query
 
         // Ordinamento dei risultati
         if (isset($order['dir']) && isset($order['column'])) {
-            $pos = array_search($order['column'], total['fields']);
+            $pos = array_search($order['column'], $total['fields']);
 
             if ($pos !== false) {
                 $pieces = explode('ORDER', $query);
@@ -250,6 +264,11 @@ class Query
 
         $result_query = self::getQuery($structure, $search);
 
+        // Filtri derivanti dai permessi (eventuali)
+        if (empty($structure->originalModule)) {
+            $result_query = Modules::replaceAdditionals($structure->id, $result_query);
+        }
+
         $query = self::str_replace_once('SELECT', 'SELECT '.implode(', ', $total['summable']).' FROM(SELECT ', $result_query).') AS `z`';
         $sums = database()->fetchOne($query);
 
@@ -307,6 +326,9 @@ class Query
         $order_by = [];
 
         $query = $element['option'];
+
+        // Aggiunta eventuali filtri dai segmenti per eseguire la query filtrata
+        $query = str_replace('1=1', '1=1 '.Modules::getAdditionalsQuery($element['attributes']['name'], null, self::$segments), $query);
         $views = self::getViews($element);
 
         $select = [];

@@ -4,15 +4,6 @@ include_once __DIR__.'/../../core.php';
 
 $_SESSION['superselect']['id_categoria'] = $record['id_categoria'];
 
-$img = null;
-if (!empty($record['immagine'])) {
-    $fileinfo = Uploads::fileInfo($record['immagine']);
-
-    $default_img = '/'.Uploads::getDirectory($id_module).'/'.$fileinfo['filename'].'_thumb600.'.$fileinfo['extension'];
-
-    $img = file_exists(DOCROOT.$default_img) ? ROOTDIR.$default_img : ROOTDIR.'/'.Uploads::getDirectory($id_module).'/'.$record['immagine'];
-}
-
 ?><form action="" method="post" id="edit-form" enctype="multipart/form-data">
 	<input type="hidden" name="backto" value="record-edit">
 	<input type="hidden" name="op" value="update">
@@ -26,19 +17,33 @@ if (!empty($record['immagine'])) {
 		<div class="panel-body">
 			<div class="row">
 				<div class="col-md-3">
-					{[ "type": "image", "label": "<?php echo tr('Immagine'); ?>", "name": "immagine", "class": "img-thumbnail", "value": "<?php echo $img; ?>" ]}
+					{[ "type": "image", "label": "<?php echo tr('Immagine'); ?>", "name": "immagine", "class": "img-thumbnail", "value": "<?php echo $articolo->image; ?>" ]}
 				</div>
 
-				<div class="col-md-4">
-					{[ "type": "text", "label": "<?php echo tr('Codice'); ?>", "name": "codice", "class":"alphanumeric-mask", "required": 1, "value": "$codice$" ]}
-					<br>
-                    {[ "type": "select", "label": "<?php echo tr('Categoria'); ?>", "name": "categoria", "required": 1, "value": "$id_categoria$", "ajax-source": "categorie" ]}
-				</div>
+                <div class="col-md-9">
+                    <div class="row">
+                        <div class="col-md-6">
+                            {[ "type": "text", "label": "<?php echo tr('Codice'); ?>", "name": "codice", "required": 1, "value": "$codice$", "validation": "codice" ]}
+                        </div>
 
-				<div class="col-md-5">
-                    {[ "type": "checkbox", "label": "<?php echo tr("Seleziona per rendere attivo l'articolo"); ?>", "name": "attivo", "value": "$attivo$", "placeholder": "<?php echo tr('Articolo attivo'); ?>" ]}
-				    <br>
-                    {[ "type": "select", "label": "<?php echo tr('Sottocategoria'); ?>", "name": "subcategoria", "value": "$id_sottocategoria$", "ajax-source": "sottocategorie" ]}
+                        <div class="col-md-3">
+                            {[ "type": "text", "label": "<?php echo tr('Barcode'); ?>", "name": "barcode", "value": "$barcode$" ]}
+                        </div>
+
+                        <div class="col-md-3">
+                            {[ "type": "checkbox", "label": "<?php echo tr("Seleziona per rendere attivo l'articolo"); ?>", "name": "attivo", "value": "$attivo$", "placeholder": "<?php echo tr('Articolo attivo'); ?>" ]}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            {[ "type": "select", "label": "<?php echo tr('Categoria'); ?>", "name": "categoria", "required": 1, "value": "$id_categoria$", "ajax-source": "categorie" ]}
+                        </div>
+
+                        <div class="col-md-6">
+                            {[ "type": "select", "label": "<?php echo tr('Sottocategoria'); ?>", "name": "subcategoria", "value": "$id_sottocategoria$", "ajax-source": "sottocategorie" ]}
+                        </div>
+                    </div>
                 </div>
 			</div>
 			<div class="row">
@@ -88,19 +93,9 @@ if (!empty($record['immagine'])) {
 					{[ "type": "select", "label": "<?php echo tr('Unità di misura'); ?>", "name": "um", "value": "$um$", "ajax-source": "misure", "icon-after": "add|<?php echo Modules::get('Unità di misura')['id']; ?>" ]}
 				</div>
 
-				<?php
-                $record['abilita_serial'] = ($record['serial'] > 0) ? 1 : $record['abilita_serial'];
-                if (empty($record['abilita_serial'])) {
-                    $plugin = $dbo->fetchArray("SELECT id FROM zz_plugins WHERE name='Serial'");
-                    echo '<script>$("#link-tab_'.$plugin[0]['id'].'").addClass("disabled");</script>';
-                }
-                ?>
-
-				  <div class="col-md-4">
+                <div class="col-md-4">
 					{[ "type": "checkbox", "label": "<?php echo tr('Abilita serial number'); ?>", "name": "abilita_serial", "value": "$abilita_serial$", "help": "<?php echo tr('Abilita serial number in fase di aggiunta articolo in fattura o ddt'); ?>", "placeholder": "<?php echo tr('Serial number'); ?>", "extra": "<?php echo ($record['serial'] > 0) ? 'readonly' : ''; ?>" ]}
                 </div>
-
-
 			</div>
 
 			<div class='row' id="div_modifica_manuale" style="display:none;">
@@ -131,11 +126,17 @@ if (!empty($record['immagine'])) {
                 <div class="panel-body">
                     <div class="row">
                         <div class="col-md-6">
-                            {[ "type": "number", "label": "<?php echo tr('Prezzo di acquisto'); ?>", "name": "prezzo_acquisto", "value": "$prezzo_acquisto$", "icon-after": "&euro;" ]}
+                            {[ "type": "number", "label": "<?php echo tr('Prezzo di acquisto'); ?>", "name": "prezzo_acquisto", "value": "$prezzo_acquisto$", "icon-after": "<?php echo currency(); ?>" ]}
                         </div>
 
                         <div class="col-md-6">
                             {[ "type": "number", "label": "<?php echo tr('Soglia minima quantità'); ?>", "name": "threshold_qta", "value": "$threshold_qta$", "decimals": "qta", "min-value": "undefined" ]}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            {[ "type": "select", "label": "<?php echo tr('Fornitore predefinito'); ?>", "name": "id_fornitore", "value": "$id_fornitore$", "ajax-source": "fornitori" ]}
                         </div>
                     </div>
 
@@ -158,13 +159,13 @@ if (!empty($record['immagine'])) {
 
                 <div class="panel-body">
 
-                    
+
                     <div class="clearfix"></div>
 
                     <div class="row">
                         <div class="col-md-6">
 						<button type="button" class="btn btn-info btn-xs pull-right tip pull-right" title="<?php echo tr('Scorpora iva dal prezzo di vendita.'); ?>" id="scorpora_iva"><i class="fa fa-calculator" aria-hidden="true"></i></button>
-                          {[ "type": "number", "label": "<?php echo tr('Prezzo di vendita'); ?>", "name": "prezzo_vendita", "value": "$prezzo_vendita$", "icon-after": "&euro;" ]}
+                          {[ "type": "number", "label": "<?php echo tr('Prezzo di vendita'); ?>", "name": "prezzo_vendita", "value": "$prezzo_vendita$", "icon-after": "<?php echo currency(); ?>" ]}
                         </div>
 
                         <div class="col-md-6">
@@ -274,14 +275,14 @@ echo '
             echo '
                         <tr>
                             <td>'.tr('Base').'</td>
-                            <td>'.Translator::numberToLocale($rsart[0]['prezzo_vendita']).' &euro;</td>
+                            <td>'.moneyFormat($rsart[0]['prezzo_vendita']).'</td>
                         </tr>';
 
             for ($i = 0; $i < count($rsl); ++$i) {
                 echo '
                         <tr>
                             <td>'.$rsl[$i]['nome'].'</td>
-                            <td>'.Translator::numberToLocale($rsart[0]['prezzo_vendita'] - $rsart[0]['prezzo_vendita'] / 100 * $rsl[$i]['prc_guadagno']).' &euro;</td>
+                            <td>'.moneyFormat($rsart[0]['prezzo_vendita'] - $rsart[0]['prezzo_vendita'] / 100 * $rsl[$i]['prc_guadagno']).'</td>
                         </tr>';
             }
 
@@ -292,56 +293,13 @@ echo '
         } else {
             echo '
             <div class="alert alert-info">
-                '.tr('Non ci sono listini caricati').'... '.Modules::link('Listini', null, tr('Crea il primo listino!')).'.
+                '.tr('Non ci sono listini caricati').'... '.Modules::link('Listini', null, tr('Crea il primo listino')).'
             </div>';
         }
 echo '
 		</div>
-	</div>
-
-
-	<div class="panel panel-primary">
-		<div class="panel-heading">
-			<h3 class="panel-title">'.tr('Questo articolo è presente nei seguenti automezzi').':</h3>
-		</div>
-		<div class="panel-body">';
-
-        // Quantità nell'automezzo
-        $rsa = $dbo->fetchArray('SELECT qta, (SELECT nome FROM dt_automezzi WHERE id=idautomezzo) AS nome, (SELECT targa FROM dt_automezzi WHERE id=idautomezzo) AS targa FROM mg_articoli_automezzi WHERE idarticolo='.prepare($id_record));
-
-        if (count($rsa) > 0) {
-            echo '
-            <div class="row">
-                <div class="col-md-12 col-lg-6">
-                    <table class="table table-striped table-condensed table-bordered">
-                        <tr>
-                            <th>'.tr('Nome automezzo').'</th>
-                            <th>'.tr('Targa').'</th>
-                            <th>'.tr('Q.tà').'</th>
-                        </tr>';
-
-            for ($i = 0; $i < count($rsa); ++$i) {
-                echo '
-                        <tr>
-                            <td>'.$rsa[$i]['nome'].'</td>
-                            <td>'.$rsa[$i]['targa'].'</td>
-                            <td>'.Translator::numberToLocale($rsa[$i]['qta']).' '.$rs[0]['unita_misura'].'</td>
-                        </tr>';
-            }
-
-            echo '
-                    </table>
-                </div>
-            </div>';
-        } else {
-            echo '
-            <div class="alert alert-info">
-                '.tr('Non ci sono automezzi collegati').'... '.Modules::link('Automezzi', null, tr('Collega il primo automezzo!')).'.
-            </div>';
-        }
+	</div>';
 ?>
-		</div>
-	</div>
 </form>
 
 {( "name": "filelist_and_upload", "id_module": "$id_module$", "id_record": "$id_record$" )}
@@ -351,7 +309,6 @@ $("#categoria").change( function(){
 	session_set("superselect,id_categoria", $(this).val(), 0);
 	$("#subcategoria").val(null).trigger("change");
 });
-
 
 function scorpora_iva() {
 	if ($("#idiva_vendita").val()!=''){
@@ -371,7 +328,7 @@ function scorpora_iva() {
 
 $("#scorpora_iva").click( function(){
 	scorpora_iva();
-});	
+});
 
 </script>
 
@@ -434,10 +391,13 @@ if (!empty($elementi)) {
 <div class="alert alert-error">
     '.tr('Eliminando questo documento si potrebbero verificare problemi nelle altre sezioni del gestionale').'.
 </div>';
-}
-
-?>
+} else {
+    ?>
 
 <a class="btn btn-danger ask" data-backto="record-list">
     <i class="fa fa-trash"></i> <?php echo tr('Elimina'); ?>
 </a>
+
+<?php
+}
+?>

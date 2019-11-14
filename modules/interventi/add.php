@@ -7,7 +7,7 @@ unset($_SESSION['superselect']['idanagrafica']);
 unset($_SESSION['superselect']['idsede']);
 
 // Calcolo del nuovo codice
-$new_codice = \Modules\Interventi\Intervento::getNextCodice();
+$new_codice = \Modules\Interventi\Intervento::getNextCodice($data);
 
 // Se ho passato l'idanagrafica, carico il tipo di intervento di default
 $idanagrafica = filter('idanagrafica');
@@ -31,7 +31,10 @@ if (!empty($idanagrafica)) {
     $rs = $dbo->fetchArray('SELECT idtipointervento_default, idzona FROM an_anagrafiche WHERE idanagrafica='.prepare($idanagrafica));
     $idtipointervento = $rs[0]['idtipointervento_default'];
     $idzona = $rs[0]['idzona'];
-    $idstatointervento = 'WIP';
+
+    $stato = $dbo->fetchArray("SELECT * FROM in_statiintervento WHERE descrizione = 'In programmazione'");
+    $idstatointervento = $stato['idstatointervento'];
+
     $richiesta = filter('richiesta');
 }
 
@@ -102,7 +105,7 @@ elseif (!empty($idcontratto) && !empty($idcontratto_riga)) {
     }
 
     // Seleziono "In programmazione" come stato
-    $rs = $dbo->fetchArray("SELECT * FROM in_statiintervento WHERE idstatointervento='WIP'");
+    $rs = $dbo->fetchArray("SELECT * FROM in_statiintervento WHERE descrizione = 'In programmazione'");
     $idstatointervento = $rs[0]['idstatointervento'];
 }
 
@@ -113,6 +116,7 @@ elseif (!empty($id_intervento)) {
     $idtipointervento = $rs[0]['idtipointervento'];
     $data = (null !== filter('data')) ? filter('data') : $rs[0]['data_richiesta'];
     $data_richiesta = $rs[0]['data_richiesta'];
+    $data_scadenza = $rs[0]['data_scadenza'];
     $richiesta = $rs[0]['richiesta'];
     $idsede = $rs[0]['idsede'];
     $idanagrafica = $rs[0]['idanagrafica'];
@@ -179,7 +183,7 @@ if (!empty($id_intervento)) {
 				</div>
 
 				<div class="col-md-4">
-                    {[ "type": "select", "label": "<?php echo tr('Sede'); ?>", "name": "idsede", "value": "<?php echo $idsede; ?>", "placheholder": "<?php echo tr('Seleziona prima un cliente'); ?>...", "ajax-source": "sedi" ]}
+                    {[ "type": "select", "label": "<?php echo tr('Sede'); ?>", "name": "idsede_destinazione", "value": "<?php echo $idsede; ?>", "placheholder": "<?php echo tr('Seleziona prima un cliente'); ?>...", "ajax-source": "sedi" ]}
 				</div>
 
 				<div class="col-md-4">
@@ -226,9 +230,9 @@ if (!empty($id_intervento)) {
                 <div class="col-md-3">
                     {[ "type": "timestamp", "label": "<?php echo tr('Data/ora richiesta'); ?>", "name": "data_richiesta", "required": 1, "value": "<?php echo $data_richiesta ?: '-now-'; ?>" ]}
                 </div>
-                
+
                 <div class="col-md-3">
-                    {[ "type": "timestamp", "label": "<?php echo tr('Data/ora scadenza'); ?>", "name": "data_scadenza", "required": 0, "value": "" ]}
+                    {[ "type": "timestamp", "label": "<?php echo tr('Data/ora scadenza'); ?>", "name": "data_scadenza", "required": 0, "value": "<?php echo $data_scadenza; ?>" ]}
                 </div>
 
 				<div class="col-md-3">
@@ -288,7 +292,7 @@ if (!empty($id_intervento)) {
 	</div>
 </form>
 
-<script src="<?php echo $rootdir; ?>/lib/init.js"></script>
+<script>$(document).ready(init)</script>
 
 <script type="text/javascript">
 	$(document).ready(function(){
@@ -337,7 +341,8 @@ if (!empty($id_intervento)) {
 
 		// Quando modifico orario inizio, allineo anche l'orario fine
         $("#bs-popup #orario_inizio").on("dp.change", function (e) {
-			$("#bs-popup #orario_fine").data("DateTimePicker").minDate(e.date).format(globals.timestampFormat);
+            $("#bs-popup #orario_fine").data("DateTimePicker").minDate(e.date);
+            $("#bs-popup #orario_fine").change();
         });
 
         // Refresh modulo dopo la chiusura di una pianificazione attività derivante dalle attività
@@ -354,7 +359,7 @@ if (!empty($id_intervento)) {
 		session_set('superselect,idanagrafica', $(this).val(), 0);
 
         var value = !$(this).val() ? true : false;
-        var placeholder = !$(this).val() ? '<?php echo tr('Seleziona prima un cliente...'); ?>' : '<?php echo tr("-Seleziona un\'opzione-"); ?>';
+        var placeholder = !$(this).val() ? "<?php echo tr('Seleziona prima un cliente...'); ?>" : "<?php echo tr("Seleziona un'opzione"); ?>";
 
 		$("#bs-popup #idsede").prop("disabled", value);
 		$("#bs-popup #idsede").selectReset(placeholder);
@@ -426,9 +431,9 @@ if (!empty($id_intervento)) {
 		if ($(this).selectData() && (($(this).selectData().tempo_standard)>0) && ('<?php echo filter('orario_fine'); ?>' == '')){
 			tempo_standard = $(this).selectData().tempo_standard;
 
-			data = moment($('#bs-popup #orario_inizio').val(), globals.timestampFormat);
+			data = moment($('#bs-popup #orario_inizio').val(), globals.timestamp_format);
 			orario_fine = data.add(tempo_standard, 'hours');
-			$('#bs-popup #orario_fine').val(orario_fine.format(globals.timestampFormat));
+			$('#bs-popup #orario_fine').val(orario_fine.format(globals.timestamp_format));
 		}
 
 	});

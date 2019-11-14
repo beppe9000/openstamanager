@@ -29,10 +29,9 @@ echo '
 		</div>
 		
 		<div class="col-md-6">
-			{[ "type": "text", "label": "'.tr('Nome').'", "name": "nome", "required": 0 ]}
+			{[ "type": "text", "label": "'.tr('Nome').'", "name": "nome", "id": "nome_", "required": 0 ]}
 		</div>
 
-		
 	</div>';
 
 echo '
@@ -48,11 +47,11 @@ echo '
 	    <div class="box-body">
 			<div class="row">
 				<div class="col-md-4">
-					{[ "type": "text", "label": "'.tr('Partita IVA').'", "maxlength": 13, "name": "piva", "class": "text-center alphanumeric-mask" ]}
+					{[ "type": "text", "label": "'.tr('Partita IVA').'", "maxlength": 13, "name": "piva", "class": "text-center alphanumeric-mask", "validation": "partita_iva"]}
 				</div>
 
 				<div class="col-md-4">
-					{[ "type": "text", "label": "'.tr('Codice fiscale').'", "maxlength": 16, "name": "codice_fiscale", "class": "text-center alphanumeric-mask" ]}
+					{[ "type": "text", "label": "'.tr('Codice fiscale').'", "maxlength": 16, "name": "codice_fiscale", "class": "text-center alphanumeric-mask", "validation": "codice_fiscale" ]}
 				</div>
 				
 				<div class="col-md-4">
@@ -93,11 +92,6 @@ echo '
 					{[ "type": "text", "label": "'.tr('Cellulare').'", "name": "cellulare", "class": "text-center", "icon-before": "<i class=\"fa fa-mobile\"></i>" ]}
 				</div>
 
-				
-				
-				
-				
-				
 			</div>
 			
 			<div class="row">
@@ -114,19 +108,9 @@ echo '
 
 echo '
 				<div class="col-md-4">
-					{[ "type": "text", "label": "'.tr('Codice destinatario').'", "name": "codice_destinatario", "required": 0, "class": "text-center text-uppercase alphanumeric-mask", "maxlength": "7", "extra": "", "help": "'.tr($help_codice_destinatario).'" ]}
-				</div>
-				
-			
-			</div>
-			
-			
-			<div class="row">
-				<div class="col-md-4">
-						{[ "type": "select", "label": "'.tr('Relazione').'", "name": "idrelazione", "values": "query=SELECT id, descrizione, colore AS _bgcolor_ FROM an_relazioni ORDER BY descrizione" ]}
+					{[ "type": "text", "label": "'.tr('Codice destinatario').'", "name": "codice_destinatario", "required": 0, "class": "text-center text-uppercase alphanumeric-mask", "maxlength": "7", "extra": "", "help": "'.tr($help_codice_destinatario).'", "readonly": "1" ]}
 				</div>
 			</div>
-
 		</div>
 	</div>';
 
@@ -141,23 +125,30 @@ echo
 
 <script>
     // Abilito solo ragione sociale oppure solo nome-cognome in base a cosa compilo
-    $('#nome, #cognome', '#bs-popup, #bs-popup2').blur(function(){
-        if ($('#nome', '#bs-popup, #bs-popup2').val() == '' && $('#cognome', '#bs-popup, #bs-popup2').val() == '' ){
-            $('#nome, #cognome', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
+    $('#nome_, #cognome', '#bs-popup, #bs-popup2').blur(function(){
+        if ($('#nome_', '#bs-popup, #bs-popup2').val() == '' && $('#cognome', '#bs-popup, #bs-popup2').val() == '' ){
+            $('#nome_, #cognome', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
             $('#ragione_sociale', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
         }else{
-            $('#nome, #cognome', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
+            $('#nome_, #cognome', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
             $('#ragione_sociale', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
         }
     });
 
     $('#ragione_sociale', '#bs-popup, #bs-popup2').blur(function(){
         if ($('#ragione_sociale', '#bs-popup, #bs-popup2').val() == '' ){
-            $('#nome, #cognome', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
+            $('#nome_, #cognome', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
             $('#ragione_sociale', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
         }else{
-            $('#nome, #cognome', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
+            $('#nome_, #cognome', '#bs-popup, #bs-popup2').prop('disabled', true).prop('required', false);
             $('#ragione_sociale', '#bs-popup, #bs-popup2').prop('disabled', false).prop('required', true);
         }
     });
+
+	$('#id_nazione', '#bs-popup, #bs-popup2').change(function(){
+		if ($(this).find('option:selected').data('text')=='IT - Italia'){
+			$('#codice_destinatario',  '#bs-popup, #bs-popup2').removeAttr('readonly');
+		}
+	});
+
 </script>

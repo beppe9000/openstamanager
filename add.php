@@ -36,8 +36,10 @@ echo '
 
 <script>
 $(document).ready(function(){
-    var form = $("#custom_fields_top-add").parent().find("form").first();
+    cleanup_inputs();
 
+    var form = $("#custom_fields_top-add").parent().find("form").first();
+                        
     // Campi a inizio form
     form.prepend($("#custom_fields_top-add").html());
 
@@ -51,8 +53,9 @@ $(document).ready(function(){
     if (!last.length) {
         last = form.find(".row").eq(-2);
     }
-
+    
     last.after($("#custom_fields_bottom-add").html());
+    restart_inputs();
 });
 </script>';
 
@@ -69,30 +72,22 @@ $(document).ready(function(){
 
     echo '
 
-    $("#form_'.$id_module.'-'.$id_plugin.'").find("form").ajaxForm({
-        url: globals.rootdir + "/actions.php",
-        beforeSubmit: function(arr, $form, options) {
-            return $form.parsley().validate();
-        },
-        data: data,
-        type: "post",
-        success: function(data){
-            data = data.trim();
-
-            if(data && $("#'.get('select').'").val() !== undefined ) {
-                result = JSON.parse(data);
-                $("#'.get('select').'").selectSetNew(result.id, result.text);
+    $("#form_'.$id_module.'-'.$id_plugin.'").find("form").submit(function () {
+        submitAjax(this, data, function(response) {
+            // Selezione automatica nuovo valore per il select
+            select = "#'.get('select').'";
+            if ($(select).val() !== undefined) {
+                $(select).selectSetNew(response.id, response.text, response.data);
             }
 
             $("#bs-popup2").modal("hide");
-        },
-        error: function(data) {
-            alert("'.tr('Errore').': " + data);
-        }
-    });
+        });
+        
+        return false;
+    })
 });
 </script>';
 }
 
 echo '
-	<script src="'.$rootdir.'/lib/init.js"></script>';
+<script>$(document).ready(init)</script>';

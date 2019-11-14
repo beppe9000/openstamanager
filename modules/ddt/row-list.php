@@ -6,7 +6,7 @@ echo '
 <table class="table table-striped table-hover table-condensed table-bordered">
     <tr>
         <th>'.tr('Descrizione').'</th>
-        <th width="120">'.tr('Q.tà').'</th>
+        <th width="120">'.tr('Q.tà').' <i title="'.tr('da evadere').' / '.tr('totale').'" class="tip fa fa-question-circle-o"></i></th>
         <th width="80">'.tr('U.m.').'</th>
         <th width="120">'.tr('Costo unitario').'</th>
         <th width="120">'.tr('Iva').'</th>
@@ -79,8 +79,7 @@ if (!empty($rs)) {
         <td class="text-center">';
         if (empty($r['is_descrizione'])) {
             echo '
-                <big>'.Translator::numberToLocale($r['qta'] - $r['qta_evasa'], 'qta').'</big>
-                <br><small>('.tr('Q.tà iniziale').': '.Translator::numberToLocale($r['qta'], 'qta').')</small>';
+                <span >'.Translator::numberToLocale($r['qta'] - $r['qta_evasa'], 'qta').' / '.Translator::numberToLocale($r['qta'], 'qta').'</span>';
         }
         echo '
         </td>';
@@ -100,13 +99,15 @@ if (!empty($rs)) {
         <td class="text-right">';
         if (empty($r['is_descrizione'])) {
             echo '
-            '.Translator::numberToLocale($r['subtotale'] / $r['qta']).' &euro;';
+            '.moneyFormat($r['subtotale'] / $r['qta']);
 
-            if ($r['sconto_unitario'] > 0) {
+            if (abs($r['sconto_unitario']) > 0) {
+                $text = $r['sconto_unitario'] > 0 ? tr('sconto _TOT_ _TYPE_') : tr('maggiorazione _TOT_ _TYPE_');
+
                 echo '
-            <br><small class="label label-danger">'.tr('sconto _TOT_ _TYPE_', [
-                '_TOT_' => Translator::numberToLocale($r['sconto_unitario']),
-                '_TYPE_' => ($r['tipo_sconto'] == 'PRC' ? '%' : '&euro;'),
+            <br><small class="label label-danger">'.replace($text, [
+                '_TOT_' => Translator::numberToLocale(abs($r['sconto_unitario'])),
+                '_TYPE_' => ($r['tipo_sconto'] == 'PRC' ? '%' : currency()),
             ]).'</small>';
             }
         }
@@ -118,7 +119,7 @@ if (!empty($rs)) {
         <td class="text-right">';
         if (empty($r['is_descrizione'])) {
             echo '
-            '.Translator::numberToLocale($r['iva']).' &euro;
+            '.moneyFormat($r['iva']).'
             <br><small class="help-block">'.$r['desc_iva'].'</small>';
         }
         echo '
@@ -129,7 +130,7 @@ if (!empty($rs)) {
         <td class="text-right">';
         if (empty($r['is_descrizione'])) {
             echo '
-            '.Translator::numberToLocale($r['subtotale'] - $r['sconto']).' &euro;';
+            '.moneyFormat($r['subtotale'] - $r['sconto']);
         }
         echo '
         </td>';
@@ -143,29 +144,18 @@ if (!empty($rs)) {
                 <input type='hidden' name='backto' value='record-edit'>
                 <input type='hidden' name='id_record' value='".$id_record."'>
                 <input type='hidden' name='idriga' value='".$r['id']."'>
-                <input type='hidden' name='dir' value='".$dir."'>";
-
-            if (!empty($r['idarticolo'])) {
-                echo "
-                <input type='hidden' name='idarticolo' value='".$r['idarticolo']."'>
-                <input type='hidden' name='op' value='unlink_articolo'>";
-            } else {
-                echo "
-
-                <input type='hidden' name='op' value='unlink_riga'>";
-            }
-
-            echo "
+                <input type='hidden' name='dir' value='".$dir."'>
+                <input type='hidden' name='op' value='delete_riga'>
 
                 <div class='input-group-btn'>";
 
             if (!empty($r['idarticolo']) && $r['abilita_serial']) {
                 echo "
-                    <a class='btn btn-primary btn-xs'data-toggle='tooltip' title='Aggiorna SN...' onclick=\"launch_modal( 'Aggiorna SN', '".$rootdir.'/modules/fatture/add_serial.php?id_module='.$id_module.'&id_record='.$id_record.'&idriga='.$r['id'].'&idarticolo='.$r['idarticolo']."', 1 );\"><i class='fa fa-barcode' aria-hidden='true'></i></a>";
+                    <a class='btn btn-primary btn-xs'data-toggle='tooltip' title='Aggiorna SN...' onclick=\"launch_modal( 'Aggiorna SN', '".$rootdir.'/modules/fatture/add_serial.php?id_module='.$id_module.'&id_record='.$id_record.'&idriga='.$r['id'].'&idarticolo='.$r['idarticolo']."');\"><i class='fa fa-barcode' aria-hidden='true'></i></a>";
             }
 
             echo "
-                    <a class='btn btn-xs btn-warning' title='Modifica questa riga...' onclick=\"launch_modal( 'Modifica riga', '".$rootdir.'/modules/ddt/row-edit.php?id_module='.$id_module.'&id_record='.$id_record.'&idriga='.$r['id']."', 1 );\">
+                    <a class='btn btn-xs btn-warning' title='Modifica questa riga...' onclick=\"launch_modal( 'Modifica riga', '".$rootdir.'/modules/ddt/row-edit.php?id_module='.$id_module.'&id_record='.$id_record.'&idriga='.$r['id']."');\">
                         <i class='fa fa-edit'></i>
                     </a>
 
@@ -177,6 +167,11 @@ if (!empty($rs)) {
         }
 
         echo '
+		<div class="handle clickable" style="padding:10px">
+			<i class="fa fa-sort"></i>
+		</div>';
+
+        echo '
         </td>
     </tr>';
     }
@@ -186,25 +181,11 @@ echo '
     </tbody>';
 
 // Calcoli
-$imponibile = sum(array_column($rs, 'subtotale'));
-$sconto = sum(array_column($rs, 'sconto'));
-$iva = sum(array_column($rs, 'iva'));
-
-$imponibile_scontato = sum($imponibile, -$sconto);
-
-$totale_iva = sum($iva, $record['iva_rivalsainps']);
-
-$totale = sum([
-    $imponibile_scontato,
-    $record['rivalsainps'],
-    $totale_iva,
-]);
-
-$netto_a_pagare = sum([
-    $totale,
-    //$marca_da_bollo, // Variabile non inizializzata!
-    -$record['ritenutaacconto'],
-]);
+$imponibile = abs($ddt->imponibile);
+$sconto = $ddt->sconto;
+$totale_imponibile = abs($ddt->totale_imponibile);
+$iva = abs($ddt->iva);
+$totale = abs($ddt->totale);
 
 // IMPONIBILE
 echo '
@@ -214,72 +195,55 @@ echo '
         </td>
 
         <td align="right">
-            '.Translator::numberToLocale($imponibile).' &euro;
+            '.moneyFormat($imponibile, 2).'
         </td>
 
         <td></td>
     </tr>';
 
-if (abs($sconto) > 0) {
-    // SCONTO
+// SCONTO
+if (!empty($sconto)) {
     echo '
     <tr>
         <td colspan="5" class="text-right">
-            <b>'.tr('Sconto', [], ['upper' => true]).':</b>
+            <b><span class="tip" title="'.tr('Un importo positivo indica uno sconto, mentre uno negativo indica una maggiorazione').'"> <i class="fa fa-question-circle-o"></i> '.tr('Sconto/maggiorazione', [], ['upper' => true]).':</span></b>
         </td>
 
         <td align="right">
-            '.Translator::numberToLocale($sconto).' &euro;
+            '.moneyFormat($sconto, 2).'
         </td>
 
         <td></td>
     </tr>';
 
-    // IMPONIBILE SCONTATO
+    // TOTALE IMPONIBILE
     echo '
     <tr>
         <td colspan="5" class="text-right">
-            <b>'.tr('Imponibile scontato', [], ['upper' => true]).':</b>
+            <b>'.tr('Totale imponibile', [], ['upper' => true]).':</b>
         </td>
 
         <td align="right">
-            '.Translator::numberToLocale($imponibile_scontato).' &euro;
+            '.moneyFormat($totale_imponibile, 2).'
         </td>
 
         <td></td>
     </tr>';
 }
 
-// RIVALSA INPS
-if (abs($record['rivalsainps']) > 0) {
-    echo '
-    <tr>
-        <td colspan="5" class="text-right">
-            <b>'.tr('Rivalsa', [], ['upper' => true]).':</b>
-        </td>
-
-        <td align="right">
-            '.Translator::numberToLocale($record['rivalsainps']).' &euro;
-        </td>
-
-        <td></td>
-    </tr>';
-}
-
-if (abs($totale_iva) > 0) {
-    echo '
+// IVA
+echo '
     <tr>
         <td colspan="5" class="text-right">
             <b>'.tr('IVA', [], ['upper' => true]).':</b>
         </td>
 
         <td align="right">
-            '.Translator::numberToLocale($totale_iva).' &euro;
+            '.moneyFormat($iva, 2).'
         </td>
 
         <td></td>
     </tr>';
-}
 
 // TOTALE
 echo '
@@ -289,59 +253,11 @@ echo '
         </td>
 
         <td align="right">
-            '.Translator::numberToLocale($totale).' &euro;
+            '.moneyFormat($totale, 2).'
         </td>
 
         <td></td>
     </tr>';
-
-// Mostra marca da bollo se c'è
-if (abs($record['bollo']) > 0) {
-    echo '
-    <tr>
-        <td colspan="5" class="text-right">
-            <b>'.tr('Marca da bollo', [], ['upper' => true]).':</b>
-        </td>
-
-        <td align="right">
-            '.Translator::numberToLocale($record['bollo']).' &euro;
-        </td>
-
-        <td></td>
-    </tr>';
-}
-
-// RITENUTA D'ACCONTO
-if (abs($record['ritenutaacconto']) > 0) {
-    echo '
-    <tr>
-        <td colspan="5" class="text-right">
-            <b>'.tr("Ritenuta d'acconto", [], ['upper' => true]).':</b>
-        </td>
-
-        <td align="right">
-            '.Translator::numberToLocale($record['ritenutaacconto']).' &euro;
-        </td>
-
-        <td></td>
-    </tr>';
-}
-
-// NETTO A PAGARE
-if ($totale != $netto_a_pagare) {
-    echo '
-    <tr>
-        <td colspan="5" class="text-right">
-            <b>'.tr('Netto a pagare', [], ['upper' => true]).':</b>
-        </td>
-
-        <td align="right">
-            '.Translator::numberToLocale($netto_a_pagare).' &euro;
-        </td>
-
-        <td></td>
-    </tr>';
-}
 
 echo '
 </table>';

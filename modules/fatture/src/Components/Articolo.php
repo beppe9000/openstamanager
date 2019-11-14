@@ -28,7 +28,7 @@ class Articolo extends Article
         return $model;
     }
 
-    public function movimenta($qta)
+    public function movimentaMagazzino($qta)
     {
         // Se il documento è generato da un ddt o intervento allora **non** movimento il magazzino
         if (!empty($this->idddt) || !empty($this->idintervento)) {
@@ -41,8 +41,8 @@ class Articolo extends Article
         $numero = $fattura->numero_esterno ?: $fattura->numero;
         $data = $fattura->data;
 
-        $carico = ($tipo->dir == 'entrata') ? tr('Ripristino articolo da _TYPE_ _NUM_') : tr('Carico magazzino da _TYPE_ numero _NUM_');
-        $scarico = ($tipo->dir == 'entrata') ? tr('Scarico magazzino per _TYPE_ numero _NUM_') : tr('Rimozione articolo da _TYPE_ _NUM_');
+        $carico = ($tipo->dir == 'entrata') ? tr('Ripristino articolo da _TYPE_ numero _NUM_') : tr('Carico magazzino da _TYPE_ numero _NUM_');
+        $scarico = ($tipo->dir == 'entrata') ? tr('Scarico magazzino per _TYPE_ numero _NUM_') : tr('Rimozione articolo da _TYPE_ numero _NUM_');
 
         $qta = ($tipo->dir == 'uscita') ? -$qta : $qta;
         $movimento = ($qta < 0) ? $carico : $scarico;
@@ -52,26 +52,14 @@ class Articolo extends Article
             '_NUM_' => $numero,
         ]);
 
+        $partenza = $fattura->direzione == 'uscita' ? $fattura->idsede_destinazione : $fattura->idsede_partenza;
+        $arrivo = $fattura->direzione == 'uscita' ? $fattura->idsede_partenza : $fattura->idsede_destinazione;
+
         $this->articolo->movimenta(-$qta, $movimento, $data, false, [
             'iddocumento' => $fattura->id,
+            'idsede_azienda' => $partenza,
+            'idsede_controparte' => $arrivo,
         ]);
-    }
-
-    public function evasioneAltriArticoli($diff)
-    {
-        parent::evasioneAltriArticoli($diff);
-
-        $database = database();
-
-        // Se c'è un collegamento ad un ddt, aggiorno la quantità evasa
-        if (!empty($this->idddt)) {
-            $database->query('UPDATE dt_righe_ddt SET qta_evasa = qta_evasa + '.$diff.' WHERE descrizione = '.prepare($this->descrizione).' AND idarticolo = '.prepare($this->idarticolo).' AND idddt = '.prepare($this->idddt).' AND idiva = '.prepare($this->idiva).' AND qta_evasa < qta LIMIT 1');
-        }
-
-        // Se c'è un collegamento ad un ordine, aggiorno la quantità evasa
-        elseif (!empty($this->idordine)) {
-            $database->query('UPDATE or_righe_ordini SET qta_evasa = qta_evasa + '.$diff.' WHERE descrizione = '.prepare($this->descrizione).' AND idarticolo = '.prepare($this->idarticolo).' AND idordine = '.prepare($this->idordine).' AND idiva = '.prepare($this->idiva).' AND qta_evasa < qta LIMIT 1');
-        }
     }
 
     public function getDirection()

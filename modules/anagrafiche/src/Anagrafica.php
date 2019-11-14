@@ -3,7 +3,14 @@
 namespace Modules\Anagrafiche;
 
 use Common\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Modules\Contratti\Contratto;
+use Modules\DDT\DDT;
 use Modules\Fatture\Fattura;
+use Modules\Ordini\Ordine;
+use Modules\Preventivi\Preventivo;
+use Modules\TipiIntervento\Tipo as TipoSessione;
+use Plugins\DichiarazioniIntento\Dichiarazione;
 use Settings;
 use Traits\RecordTrait;
 use Util\Generator;
@@ -11,6 +18,7 @@ use Util\Generator;
 class Anagrafica extends Model
 {
     use RecordTrait;
+    use SoftDeletes;
 
     protected $table = 'an_anagrafiche';
     protected $primaryKey = 'idanagrafica';
@@ -36,16 +44,16 @@ class Anagrafica extends Model
      *
      * @return self
      */
-    public static function build($ragione_sociale, array $tipologie = [])
+    public static function build($ragione_sociale, $nome = '', $cognome = '', array $tipologie = [])
     {
         $model = parent::build();
 
         $model->ragione_sociale = $ragione_sociale;
 
-        $ultimo = database()->fetchOne('SELECT codice FROM an_anagrafiche ORDER BY CAST(codice AS SIGNED) DESC LIMIT 1');
-        $codice = Generator::generate(setting('Formato codice anagrafica'), $ultimo['codice']);
+        $model->nome = $nome;
+        $model->cognome = $cognome;
 
-        $model->codice = $codice;
+        $model->codice = static::getNextCodice();
         $model->id_ritenuta_acconto_vendite = setting("Percentuale ritenuta d'acconto");
         $model->save();
 
@@ -53,6 +61,17 @@ class Anagrafica extends Model
         $model->save();
 
         return $model;
+    }
+
+    public static function fromTipo($type)
+    {
+        $tipologia = Tipo::where('descrizione', 'Tecnico')->first();
+
+        $anagrafiche = self::whereHas('tipi', function ($query) use ($tipologia) {
+            $query->where('an_tipianagrafiche.idtipoanagrafica', '=', $tipologia->id);
+        });
+
+        return $anagrafiche;
     }
 
     public static function fixAzienda(Anagrafica $anagrafica)
@@ -102,11 +121,24 @@ class Anagrafica extends Model
 
     public static function fixTecnico(Anagrafica $anagrafica)
     {
-        // Copio già le tariffe per le varie attività
-        $result = database()->query('INSERT INTO in_tariffe(idtecnico, idtipointervento, costo_ore, costo_km, costo_dirittochiamata, costo_ore_tecnico, costo_km_tecnico, costo_dirittochiamata_tecnico) SELECT '.prepare($model->id).', idtipointervento, costo_orario, costo_km, costo_diritto_chiamata, costo_orario_tecnico, costo_km_tecnico, costo_diritto_chiamata_tecnico FROM in_tipiintervento');
+        $database = database();
 
-        if (!$result) {
-            flash()->error(tr("Errore durante l'importazione tariffe!"));
+        $presenti = $database->fetchArray('SELECT idtipointervento AS id FROM in_tariffe WHERE idtecnico = '.prepare($anagrafica->id));
+
+        // Aggiunta associazioni costi unitari al contratto
+        $tipi = TipoSessione::whereNotIn('idtipointervento', array_column($presenti, 'id'))->get();
+
+        foreach ($tipi as $tipo) {
+            $database->insert('in_tariffe', [
+                'idtecnico' => $anagrafica->id,
+                'idtipointervento' => $tipo->id,
+                'costo_ore' => $tipo->costo_orario,
+                'costo_km' => $tipo->costo_km,
+                'costo_dirittochiamata' => $tipo->costo_diritto_chiamata,
+                'costo_ore_tecnico' => $tipo->costo_orario_tecnico,
+                'costo_km_tecnico' => $tipo->costo_km_tecnico,
+                'costo_dirittochiamata_tecnico' => $tipo->costo_diritto_chiamata_tecnico,
+            ]);
         }
     }
 
@@ -144,10 +176,36 @@ class Anagrafica extends Model
      */
     public function isAzienda()
     {
-        return $this->tipi()->get()->search(function ($item, $key) {
-            return $item->descrizione == 'Azienda';
+        return $this->isTipo('Azienda');
+    }
+
+    /**
+     * Controlla se l'anagrafica è di tipo 'Azienda'.
+     *
+     * @return bool
+     */
+    public function isTipo($type)
+    {
+        return $this->tipi()->get()->search(function ($item, $key) use ($type) {
+            return $item->descrizione == $type;
         }) !== false;
     }
+
+    public function delete()
+    {
+        if (!$this->isAzienda()) {
+            return parent::delete();
+        }
+    }
+
+    public function save(array $options = [])
+    {
+        $this->fixRagioneSociale();
+
+        return parent::save($options);
+    }
+
+    // Attributi Eloquent
 
     /**
      * Restituisce l'identificativo.
@@ -157,16 +215,6 @@ class Anagrafica extends Model
     public function getIdAttribute()
     {
         return $this->idanagrafica;
-    }
-
-    public function setCodiceAttribute($value)
-    {
-        if (self::where([
-            ['codice', $value],
-            [$this->primaryKey, '<>', $this->id],
-        ])->count() == 0) {
-            $this->attributes['codice'] = $value;
-        }
     }
 
     public function getPartitaIvaAttribute()
@@ -179,6 +227,16 @@ class Anagrafica extends Model
         $this->attributes['piva'] = trim(strtoupper($value));
     }
 
+    public function setNomeAttribute($value)
+    {
+        $this->attributes['nome'] = trim($value);
+    }
+
+    public function setCognomeAttribute($value)
+    {
+        $this->attributes['cognome'] = trim($value);
+    }
+
     public function setCodiceFiscaleAttribute($value)
     {
         $this->attributes['codice_fiscale'] = trim(strtoupper($value));
@@ -186,28 +244,13 @@ class Anagrafica extends Model
 
     public function setCodiceDestinatarioAttribute($value)
     {
-        if (empty($this->tipo) || $this->tipo == 'Privato' || in_array($value, ['999999', '0000000']) || $this->sedeLegale->nazione->iso2 != 'IT') {
+        if ($this->tipo == 'Privato' || in_array($value, ['999999', '0000000']) || $this->sedeLegale->nazione->iso2 != 'IT') {
             $codice_destinatario = '';
         } else {
             $codice_destinatario = $value;
         }
 
         $this->attributes['codice_destinatario'] = trim(strtoupper($codice_destinatario));
-    }
-
-    public function tipi()
-    {
-        return $this->belongsToMany(Tipo::class, 'an_tipianagrafiche_anagrafiche', 'idanagrafica', 'idtipoanagrafica');
-    }
-
-    public function fatture()
-    {
-        return $this->hasMany(Fattura::class, 'idanagrafica');
-    }
-
-    public function nazione()
-    {
-        return $this->belongsTo(Nazione::class, 'id_nazione');
     }
 
     /**
@@ -218,5 +261,75 @@ class Anagrafica extends Model
     public function getSedeLegaleAttribute()
     {
         return $this;
+    }
+
+    // Relazioni Eloquent
+
+    public function tipi()
+    {
+        return $this->belongsToMany(Tipo::class, 'an_tipianagrafiche_anagrafiche', 'idanagrafica', 'idtipoanagrafica');
+    }
+
+    public function nazione()
+    {
+        return $this->belongsTo(Nazione::class, 'id_nazione');
+    }
+
+    public function fatture()
+    {
+        return $this->hasMany(Fattura::class, 'idanagrafica');
+    }
+
+    public function ordini()
+    {
+        return $this->hasMany(Ordine::class, 'idanagrafica');
+    }
+
+    public function ddt()
+    {
+        return $this->hasMany(DDT::class, 'idanagrafica');
+    }
+
+    public function contratti()
+    {
+        return $this->hasMany(Contratto::class, 'idanagrafica');
+    }
+
+    public function preventivi()
+    {
+        return $this->hasMany(Preventivo::class, 'idanagrafica');
+    }
+
+    public function dichiarazioni()
+    {
+        return $this->hasMany(Dichiarazione::class, 'id_anagrafica');
+    }
+
+    // Metodi statici
+
+    /**
+     * Calcola il nuovo codice di anagrafica.
+     *
+     * @return string
+     */
+    public static function getNextCodice()
+    {
+        // Recupero maschera per le anagrafiche
+        $maschera = setting('Formato codice anagrafica');
+
+        $ultimo = Generator::getPreviousFrom($maschera, 'an_anagrafiche', 'codice', [
+            "codice != ''",
+            'deleted_at IS NULL',
+        ]);
+        $codice = Generator::generate($maschera, $ultimo);
+
+        return $codice;
+    }
+
+    protected function fixRagioneSociale()
+    {
+        if (!empty($this->cognome) || !empty($this->nome)) {
+            $this->ragione_sociale = $this->cognome.' '.$this->nome;
+        }
     }
 }
